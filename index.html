@@ -658,7 +658,7 @@
     <div class="brand">
       <h1>Historial Clínico Veterinario</h1>
       <p class="brand-sub">Amor por el Bienestar Animal</p>
-      <p class="sync-status no-print"><span class="sync-dot" id="syncDot"></span> <span id="syncLabel">Conectando…</span> · <a href="#" id="logoutLink" style="color:var(--muted);">Cerrar sesión</a></p>
+      <p class="sync-status no-print"><span class="sync-dot" id="syncDot"></span> <span id="syncLabel">Conectando…</span> · <a href="#" id="logoutLink" style="color:var(--muted);">⚙ Configuración de sincronización</a></p>
     </div>
     <img class="logo" id="clinicLogo" alt="Logo de la clínica">
   </header>
@@ -1970,22 +1970,52 @@
         attachFirestoreListeners();
       } else {
         detachFirestoreListeners();
-        showLogin();
+        auth.signInAnonymously().catch(err=>{
+          // Si falla (p.ej. el modo Anónimo no está activado en Firebase),
+          // se muestra el login como respaldo en vez de dejar a la persona sin acceso.
+          console.error('No se pudo entrar automáticamente:', err);
+          $('#loginError').textContent = 'No se pudo entrar automáticamente (' + err.message + '). Inicia sesión o pide ayuda para activar el modo "Anónimo" en Firebase Authentication.';
+          $('#loginError').style.display = '';
+          showLogin();
+        });
       }
     });
   }
 
+  function extractBraceBlock(text){
+    let searchFrom = 0;
+    let firstBlock = null;
+    while(true){
+      const start = text.indexOf('{', searchFrom);
+      if(start === -1) return firstBlock;
+      let depth = 0, end = -1;
+      for(let i = start; i < text.length; i++){
+        if(text[i] === '{') depth++;
+        else if(text[i] === '}'){
+          depth--;
+          if(depth === 0){ end = i; break; }
+        }
+      }
+      if(end === -1) return firstBlock; // llaves sin cerrar
+      const candidate = text.slice(start, end+1);
+      if(firstBlock === null) firstBlock = candidate;
+      if(/apiKey/.test(candidate)) return candidate;
+      searchFrom = end + 1; // este bloque no es la config (ej. "import { x }"); seguir buscando
+    }
+  }
+
+
   function parseFirebaseConfigInput(raw){
-    // Acepta JSON estricto o el formato que Firebase realmente entrega
-    // (objeto JS con llaves sin comillas, y opcionalmente "const firebaseConfig = ... ;").
-    let cleaned = raw.trim();
-    cleaned = cleaned.replace(/^\s*(const|let|var)\s+\w+\s*=\s*/, '');
-    cleaned = cleaned.replace(/;\s*$/, '');
+    // Acepta lo que sea que el usuario haya pegado: el objeto solo, con
+    // "const firebaseConfig = ...;" alrededor, o el bloque completo de Firebase
+    // (con comentarios, el import y el initializeApp incluidos).
+    const block = extractBraceBlock(raw);
+    if(!block) throw new Error('No se encontró un bloque "{ ... }" en el texto pegado.');
     try {
-      return JSON.parse(cleaned);
+      return JSON.parse(block);
     } catch(e){
       // fallback: es un objeto literal de JS (claves sin comillas), no JSON estricto
-      const obj = Function('"use strict"; return (' + cleaned + ');')();
+      const obj = Function('"use strict"; return (' + block + ');')();
       if(typeof obj !== 'object' || obj === null) throw new Error('No se reconoce como un objeto de configuración.');
       return obj;
     }
@@ -2039,6 +2069,8 @@
   $('#logoutLink').addEventListener('click', (e)=>{
     e.preventDefault();
     if(auth) auth.signOut();
+    localStorage.removeItem(FIREBASE_CONFIG_KEY);
+    showSetup();
   });
   $('#changeConfigLink').addEventListener('click', (e)=>{
     e.preventDefault();
