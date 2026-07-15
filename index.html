@@ -1975,17 +1975,40 @@
     });
   }
 
+  function parseFirebaseConfigInput(raw){
+    // Acepta JSON estricto o el formato que Firebase realmente entrega
+    // (objeto JS con llaves sin comillas, y opcionalmente "const firebaseConfig = ... ;").
+    let cleaned = raw.trim();
+    cleaned = cleaned.replace(/^\s*(const|let|var)\s+\w+\s*=\s*/, '');
+    cleaned = cleaned.replace(/;\s*$/, '');
+    try {
+      return JSON.parse(cleaned);
+    } catch(e){
+      // fallback: es un objeto literal de JS (claves sin comillas), no JSON estricto
+      const obj = Function('"use strict"; return (' + cleaned + ');')();
+      if(typeof obj !== 'object' || obj === null) throw new Error('No se reconoce como un objeto de configuración.');
+      return obj;
+    }
+  }
+
   $('#setupSaveBtn').addEventListener('click', ()=>{
     const raw = $('#setupConfigInput').value.trim();
+    let config;
     try{
-      const config = JSON.parse(raw);
+      config = parseFirebaseConfigInput(raw);
       if(!config.apiKey || !config.projectId) throw new Error('Faltan campos (apiKey / projectId).');
+    } catch(err){
+      $('#setupError').textContent = 'Configuración inválida: ' + err.message;
+      $('#setupError').style.display = '';
+      return;
+    }
+    try{
       localStorage.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(config));
       $('#setupError').style.display = 'none';
       initFirebase(config);
       showLogin();
     } catch(err){
-      $('#setupError').textContent = 'Configuración inválida: ' + err.message;
+      $('#setupError').textContent = 'No se pudo conectar con Firebase: ' + err.message + '. Revisa tu conexión a internet e inténtalo de nuevo.';
       $('#setupError').style.display = '';
     }
   });
