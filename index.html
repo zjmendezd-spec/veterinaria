@@ -1951,8 +1951,18 @@
       // hay que quitarlo temporalmente para que html2canvas capture TODO el contenido, no solo lo visible.
       const prevMaxHeight = node.style.maxHeight;
       const prevOverflow = node.style.overflowY;
+      const prevWidth = node.style.width;
+      const prevMaxWidth = node.style.maxWidth;
+      const prevBoxSizing = node.style.boxSizing;
       node.style.maxHeight = 'none';
       node.style.overflowY = 'visible';
+      // Forzamos SIEMPRE un ancho fijo tipo "computadora" (independiente del tamaño real
+      // de la pantalla) para que el certificado se vea igual en celular que en computadora,
+      // y para evitar que en pantallas angostas el contenido se recorte al capturarlo.
+      const FIXED_CAPTURE_WIDTH = 760;
+      node.style.boxSizing = 'border-box';
+      node.style.width = FIXED_CAPTURE_WIDTH + 'px';
+      node.style.maxWidth = 'none';
       // Forzar un reflow real y esperar a que las fuentes web terminen de cargar y a que
       // el navegador pinte el nuevo layout antes de capturar (evita capturas cortadas
       // o con texto de tamaño incorrecto, sobre todo en celulares).
@@ -1960,10 +1970,16 @@
       if(document.fonts && document.fonts.ready){ await document.fonts.ready; }
       await new Promise(r=> requestAnimationFrame(()=> requestAnimationFrame(r)));
 
-      const isMobile = window.innerWidth < 600;
-      const canvas = await html2canvas(node, { scale: isMobile ? 1.4 : 2, backgroundColor:'#ffffff', useCORS:true });
+      const canvas = await html2canvas(node, {
+        scale: 2, backgroundColor:'#ffffff', useCORS:true,
+        width: FIXED_CAPTURE_WIDTH, windowWidth: FIXED_CAPTURE_WIDTH,
+        x: 0, y: 0, scrollX: 0, scrollY: 0
+      });
       node.style.maxHeight = prevMaxHeight;
       node.style.overflowY = prevOverflow;
+      node.style.width = prevWidth;
+      node.style.maxWidth = prevMaxWidth;
+      node.style.boxSizing = prevBoxSizing;
 
       if(canvas.width < 10 || canvas.height < 10){
         throw new Error('La captura del certificado salió vacía. Intenta de nuevo.');
