@@ -724,6 +724,7 @@
     <button class="view-tab" id="tabInventory">💊 Inventario de medicamentos</button>
     <button class="view-tab" id="tabServices">💰 Servicios</button>
     <button class="view-tab" id="tabBirthdays">🎂 Cumpleaños</button>
+    <button class="view-tab" id="tabQuotes">📝 Cotización a domicilio</button>
   </nav>
 
   <div id="patientsView">
@@ -776,6 +777,54 @@
     </div>
     <main class="patient-list" id="birthdayList"></main>
     <p class="empty-state" id="birthdayEmptyState" style="display:none;">No hay pacientes con cumpleaños este mes.</p>
+  </div>
+
+  <div id="quotesView" style="display:none;">
+    <div style="max-width:1000px; margin:0 auto; padding:0 24px;">
+      <div class="card" style="background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:22px 24px; margin-bottom:20px;">
+        <h3 style="margin:0 0 4px; color:var(--navy); font-family:'Manrope',sans-serif;">Nueva cotización de visita a domicilio</h3>
+        <p style="margin:0 0 16px; font-size:.85rem; color:var(--muted);">Arma una cotización para mostrarle al cliente antes de confirmar la visita, y descárgala en PDF con el membrete de la clínica.</p>
+
+        <div class="form-grid">
+          <div class="field"><label>Nombre del cliente</label><input type="text" id="q_cliente" placeholder="Ej. Ana López"></div>
+          <div class="field"><label>Teléfono</label><input type="tel" id="q_telefono"></div>
+          <div class="field full"><label>Dirección / zona de la visita</label><input type="text" id="q_direccion" placeholder="Ej. Fracc. Carrizal, Villahermosa"></div>
+          <div class="field"><label>Paciente (opcional)</label><input type="text" id="q_paciente" placeholder="Ej. Firulais"></div>
+          <div class="field"><label>Fecha propuesta</label><input type="date" id="q_fecha"></div>
+        </div>
+
+        <div class="field full" style="margin-top:6px;">
+          <label>Servicios</label>
+          <datalist id="quoteServiceOptionsList"></datalist>
+          <div class="repeat-col-hints" style="grid-template-columns:2fr 1fr 0.7fr auto;"><span>Servicio</span><span>Precio unitario</span><span>Cant.</span></div>
+          <div class="repeat-rows" id="quoteServiceRows"></div>
+          <button type="button" class="btn-link" id="addQuoteServiceRow">+ Agregar servicio</button>
+          <p style="margin:6px 0 0; font-size:.85rem;">Subtotal servicios: <strong id="quoteServiceOnlyTotal">$0.00</strong></p>
+        </div>
+
+        <div class="field full" style="border-top:1px dashed var(--line); padding-top:14px;">
+          <label>Medicamentos / insumos</label>
+          <datalist id="quoteMedOptionsList"></datalist>
+          <div class="repeat-col-hints" style="grid-template-columns:1.4fr 0.8fr 0.9fr 0.6fr auto;"><span>Medicamento</span><span>Vender por</span><span>Precio</span><span>Cant.</span></div>
+          <div class="repeat-rows" id="quoteMedRows"></div>
+          <button type="button" class="btn-link" id="addQuoteMedRow">+ Agregar medicamento</button>
+          <p style="margin:6px 0 0; font-size:.85rem;">Subtotal medicamentos: <strong id="quoteMedOnlyTotal">$0.00</strong></p>
+        </div>
+
+        <div class="field full" style="margin-top:6px;">
+          <label>Notas adicionales (opcional)</label>
+          <textarea id="q_notas" rows="2" placeholder="Ej. Costo de traslado incluido, cotización válida por 15 días…"></textarea>
+        </div>
+
+        <div style="display:flex; gap:12px; align-items:center; margin-top:16px; flex-wrap:wrap;">
+          <p style="margin:0; font-size:1rem;">Total estimado: <strong id="quoteGrandTotal">$0.00</strong></p>
+          <button type="button" class="btn-outline" id="quoteRefreshBtn">🔄 Actualizar vista previa</button>
+          <button type="button" class="btn-primary" id="quoteDownloadBtn">⬇ Descargar PDF</button>
+        </div>
+      </div>
+
+      <div id="quotePreview" class="cert-preview" style="margin-bottom:30px;"></div>
+    </div>
   </div>
 
   <!-- Modal: nuevo / editar expediente -->
@@ -847,7 +896,7 @@
   <!-- Modal: nueva consulta (seguimiento) -->
   <div class="modal-overlay no-print" id="visitModalOverlay">
     <div class="modal">
-      <h2>Nueva consulta</h2>
+      <h2 id="visitModalTitle">Nueva consulta</h2>
       <p class="modal-sub" id="visitModalSub">Registro de seguimiento para el expediente.</p>
       <form id="visitForm">
         <div class="form-grid">
@@ -889,7 +938,7 @@
         </div>
         <div class="modal-actions">
           <button type="button" class="btn-secondary" id="cancelVisitBtn">Cancelar</button>
-          <button type="submit" class="btn-primary">Guardar consulta</button>
+          <button type="submit" class="btn-primary" id="visitSubmitBtn">Guardar consulta</button>
         </div>
       </form>
     </div>
@@ -1260,6 +1309,7 @@
             <tfoot><tr><td colspan="3">Total pagado en esta visita</td><td>${money(v.totalCotizacion||0)}</td></tr></tfoot>
           </table>` : ''}
           <div class="visit-actions no-print">
+            <button class="btn-link edit-visit-btn" data-patient="${patientId}" data-visit="${v.id}">Editar consulta</button>
             <button class="btn-link danger delete-visit-btn" data-patient="${patientId}" data-visit="${v.id}">Eliminar consulta</button>
           </div>
         </div>
@@ -1447,6 +1497,12 @@
         db.collection('patients').doc(delVisitBtn.dataset.patient).collection('visits').doc(delVisitBtn.dataset.visit).delete()
           .catch(err=> alert('No se pudo eliminar: '+err.message));
       }
+      return;
+    }
+
+    const editVisitBtn = e.target.closest('.edit-visit-btn');
+    if(editVisitBtn){
+      openVisitModal(editVisitBtn.dataset.patient, editVisitBtn.dataset.visit);
       return;
     }
 
@@ -1742,24 +1798,52 @@
     return [...collectVisitServiciosOnly(), ...collectVisitMedRows()];
   }
 
-  function openVisitModal(patientId){
+  let editingVisitId = null;
+  function openVisitModal(patientId, visitId=null){
     visitTargetPatientId = patientId;
+    editingVisitId = visitId;
     const p = patients.find(x=>x.id===patientId);
     $('#visitForm').reset();
     pendingVisitPhotos = [];
-    renderPhotoPreview();
     $('#visitServiceRows').innerHTML = '';
     $('#visitMedRows').innerHTML = '';
     populateVisitServiceOptions();
+
+    const v = visitId ? (p && p.visits || []).find(x=>x.id===visitId) : null;
+
+    if(v){
+      $('#visitModalTitle').textContent = 'Editar consulta';
+      $('#visitSubmitBtn').textContent = 'Guardar cambios';
+      $('#visitModalSub').textContent = `Editando la consulta del ${fmtDate(v.fecha)} de ${p ? p.nombre : 'el paciente'}.`;
+      $('#v_fecha').value = v.fecha||'';
+      $('#v_veterinario').value = v.veterinario||'';
+      $('#v_motivo').value = v.motivo||'';
+      $('#v_peso').value = v.peso||'';
+      $('#v_temperatura').value = v.temperatura||'';
+      $('#v_hallazgos').value = v.hallazgos||'';
+      $('#v_diagnostico').value = v.diagnostico||'';
+      $('#v_tratamiento').value = v.tratamiento||'';
+      $('#v_proxima').value = v.proxima||'';
+      pendingVisitPhotos = (v.fotos||[]).slice();
+      (v.servicios||[]).forEach(s=>{
+        if(s.tipo==='medicamento') addVisitMedRow(s.nombre, s.unidad||'pieza', s.precioOriginal, s.cantidadOriginal);
+        else addVisitServiceRow(s.nombre, s.precio, s.cantidad);
+      });
+    } else {
+      $('#visitModalTitle').textContent = 'Nueva consulta';
+      $('#visitSubmitBtn').textContent = 'Guardar consulta';
+      $('#v_fecha').value = new Date().toISOString().slice(0,10);
+      $('#v_veterinario').value = 'MVZ Yohali Almeida';
+      $('#visitModalSub').textContent = `Registro de seguimiento para ${p ? p.nombre : 'el paciente'}.`;
+    }
+    renderPhotoPreview();
     updateVisitTotals();
-    $('#v_fecha').value = new Date().toISOString().slice(0,10);
-    $('#v_veterinario').value = 'MVZ Yohali Almeida';
-    $('#visitModalSub').textContent = `Registro de seguimiento para ${p ? p.nombre : 'el paciente'}.`;
     $('#visitModalOverlay').classList.add('open');
   }
   function closeVisitModal(){
     $('#visitModalOverlay').classList.remove('open');
     visitTargetPatientId = null;
+    editingVisitId = null;
   }
   $('#cancelVisitBtn').addEventListener('click', closeVisitModal);
   $('#visitModalOverlay').addEventListener('click', (e)=>{ if(e.target.id==='visitModalOverlay') closeVisitModal(); });
@@ -1770,15 +1854,19 @@
     if(!patientId) return;
     const p = patients.find(x=>x.id===patientId);
     const visitServicios = collectVisitServicios();
+    const isEditing = !!editingVisitId;
 
-    // Validar existencia suficiente de los medicamentos que se van a vender en esta consulta
+    // Validar existencia suficiente de los medicamentos (solo aplica al crear una consulta nueva;
+    // al editar una ya existente no se vuelve a descontar inventario, para no descontarlo dos veces).
     const medRows = visitServicios.filter(v=>v.tipo==='medicamento');
-    for(const row of medRows){
-      const item = inventory.find(i=>i.id===row.medicamentoId);
-      if(!item){ alert(`El medicamento "${row.nombre}" ya no está en el inventario.`); return; }
-      if(row.cantidad > item.stock){
-        alert(`No hay suficiente existencia de "${row.nombre}". Disponible: ${item.stock} pieza(s), solicitado: ${row.cantidad}.`);
-        return;
+    if(!isEditing){
+      for(const row of medRows){
+        const item = inventory.find(i=>i.id===row.medicamentoId);
+        if(!item){ alert(`El medicamento "${row.nombre}" ya no está en el inventario.`); return; }
+        if(row.cantidad > item.stock){
+          alert(`No hay suficiente existencia de "${row.nombre}". Disponible: ${item.stock} pieza(s), solicitado: ${row.cantidad}.`);
+          return;
+        }
       }
     }
 
@@ -1787,26 +1875,28 @@
     submitBtn.disabled = true; submitBtn.textContent = 'Guardando…';
 
     try{
-      // Descontar del inventario cada medicamento vendido en esta consulta (transacción atómica por artículo)
-      for(const row of medRows){
-        const ref = db.collection('inventory').doc(row.medicamentoId);
-        await db.runTransaction(tx=> tx.get(ref).then(doc=>{
-          if(!doc.exists) throw new Error(`El medicamento "${row.nombre}" ya no existe.`);
-          const it = doc.data();
-          if(row.cantidad > (it.stock||0)) throw new Error(`Ya no hay suficiente existencia de "${row.nombre}".`);
-          const nuevaVenta = {
-            fecha: $('#v_fecha').value, paciente: p?p.nombre:'',
-            cantidad: row.cantidad, precioVenta: row.precio,
-            unidad: row.unidad==='caja' ? 'Caja' : 'Pieza',
-            cantidadOriginal: row.cantidadOriginal, precioOriginal: row.precioOriginal
-          };
-          tx.update(ref, {
-            stock: (it.stock||0) - row.cantidad,
-            totalVendidoUnidades: (it.totalVendidoUnidades||0) + row.cantidad,
-            totalIngresos: (it.totalIngresos||0) + row.cantidad*row.precio,
-            ventas: firebase.firestore.FieldValue.arrayUnion(nuevaVenta)
-          });
-        }));
+      if(!isEditing){
+        // Descontar del inventario cada medicamento vendido en esta consulta (transacción atómica por artículo)
+        for(const row of medRows){
+          const ref = db.collection('inventory').doc(row.medicamentoId);
+          await db.runTransaction(tx=> tx.get(ref).then(doc=>{
+            if(!doc.exists) throw new Error(`El medicamento "${row.nombre}" ya no existe.`);
+            const it = doc.data();
+            if(row.cantidad > (it.stock||0)) throw new Error(`Ya no hay suficiente existencia de "${row.nombre}".`);
+            const nuevaVenta = {
+              fecha: $('#v_fecha').value, paciente: p?p.nombre:'',
+              cantidad: row.cantidad, precioVenta: row.precio,
+              unidad: row.unidad==='caja' ? 'Caja' : 'Pieza',
+              cantidadOriginal: row.cantidadOriginal, precioOriginal: row.precioOriginal
+            };
+            tx.update(ref, {
+              stock: (it.stock||0) - row.cantidad,
+              totalVendidoUnidades: (it.totalVendidoUnidades||0) + row.cantidad,
+              totalIngresos: (it.totalIngresos||0) + row.cantidad*row.precio,
+              ventas: firebase.firestore.FieldValue.arrayUnion(nuevaVenta)
+            });
+          }));
+        }
       }
 
       const visit = {
@@ -1824,7 +1914,11 @@
         totalCotizacion: visitServicios.reduce((s,v)=> s + (v.tipo==='medicamento' ? v.precioOriginal*v.cantidadOriginal : v.precio*v.cantidad), 0),
       };
       expandedIds.add(patientId);
-      await db.collection('patients').doc(patientId).collection('visits').add(visit);
+      if(isEditing){
+        await db.collection('patients').doc(patientId).collection('visits').doc(editingVisitId).set(visit);
+      } else {
+        await db.collection('patients').doc(patientId).collection('visits').add(visit);
+      }
       pendingVisitPhotos = [];
       closeVisitModal();
       render();
@@ -2673,12 +2767,244 @@
     $('#birthdayEmptyState').style.display = filtered.length ? 'none' : 'block';
   }
 
+  // ---------------- COTIZACIÓN DE VISITA A DOMICILIO ----------------
+  let quoteViewInitialized = false;
+  function initQuoteViewIfNeeded(){
+    populateQuoteOptions();
+    loadClinicInfo().then(()=> renderQuotePreview());
+    if(quoteViewInitialized) return;
+    quoteViewInitialized = true;
+    $('#q_fecha').value = new Date().toISOString().slice(0,10);
+  }
+  function populateQuoteOptions(){
+    const sList = $('#quoteServiceOptionsList');
+    if(sList) sList.innerHTML = services.map(s=>`<option value="${esc(s.nombre)}">${money(s.precio)}</option>`).join('');
+    const mList = $('#quoteMedOptionsList');
+    if(mList) mList.innerHTML = inventory.map(m=>`<option value="${esc(m.nombre)}">${money(m.precioVenta)}/pieza · disp: ${m.stock}</option>`).join('');
+  }
+
+  function addQuoteServiceRow(nombre='', precio='', cantidad=1){
+    const row = document.createElement('div');
+    row.className = 'repeat-row vs-row';
+    row.innerHTML = `
+      <input type="text" class="qs-nombre" list="quoteServiceOptionsList" placeholder="Ej. Consulta a domicilio">
+      <input type="number" step="0.01" class="qs-precio" placeholder="0.00">
+      <input type="number" step="1" min="1" class="qs-cantidad" value="${cantidad}">
+      <button type="button" class="remove-row-btn" title="Eliminar">✕</button>`;
+    row.querySelector('.qs-nombre').value = nombre;
+    row.querySelector('.qs-precio').value = precio;
+    $('#quoteServiceRows').appendChild(row);
+    const nombreInput = row.querySelector('.qs-nombre');
+    const precioInput = row.querySelector('.qs-precio');
+    nombreInput.addEventListener('input', ()=>{
+      const match = services.find(s=>s.nombre===nombreInput.value);
+      if(match && !precioInput.dataset.userEdited) precioInput.value = match.precio;
+      updateQuoteTotals();
+    });
+    precioInput.addEventListener('input', ()=>{ precioInput.dataset.userEdited='1'; updateQuoteTotals(); });
+    row.querySelector('.qs-cantidad').addEventListener('input', updateQuoteTotals);
+  }
+  function collectQuoteServiciosOnly(){
+    return [...$('#quoteServiceRows').querySelectorAll('.repeat-row')].map(row=>({
+      nombre: row.querySelector('.qs-nombre').value.trim(),
+      precio: parseFloat(row.querySelector('.qs-precio').value)||0,
+      cantidad: Math.max(1, parseInt(row.querySelector('.qs-cantidad').value,10)||1)
+    })).filter(v=>v.nombre);
+  }
+  $('#quoteServiceRows').addEventListener('click', (e)=>{
+    if(e.target.closest('.remove-row-btn')){ e.target.closest('.repeat-row').remove(); updateQuoteTotals(); }
+  });
+  $('#addQuoteServiceRow').addEventListener('click', ()=> addQuoteServiceRow());
+
+  function addQuoteMedRow(nombre='', unidad='pieza', precio='', cantidad=1){
+    const row = document.createElement('div');
+    row.className = 'repeat-row vm-row';
+    row.innerHTML = `
+      <input type="text" class="qm-nombre" list="quoteMedOptionsList" placeholder="Ej. Bravecto">
+      <select class="qm-unidad">
+        <option value="pieza" ${unidad==='pieza'?'selected':''}>Pieza</option>
+        <option value="caja" ${unidad==='caja'?'selected':''}>Caja</option>
+      </select>
+      <input type="number" step="0.01" class="qm-precio" placeholder="0.00">
+      <input type="number" step="1" min="1" class="qm-cantidad" value="${cantidad}">
+      <button type="button" class="remove-row-btn" title="Eliminar">✕</button>`;
+    row.querySelector('.qm-nombre').value = nombre;
+    row.querySelector('.qm-precio').value = precio;
+    $('#quoteMedRows').appendChild(row);
+    const nombreInput = row.querySelector('.qm-nombre');
+    const unidadInput = row.querySelector('.qm-unidad');
+    const precioInput = row.querySelector('.qm-precio');
+    function refreshMatch(){
+      const med = inventory.find(m=>m.nombre===nombreInput.value);
+      if(med){
+        const porCaja = med.unidadesPorCaja||1;
+        const esCaja = unidadInput.value==='caja';
+        if(!precioInput.dataset.userEdited){
+          precioInput.value = esCaja ? (med.precioVentaCaja || med.precioVenta*porCaja).toFixed(2) : med.precioVenta;
+        }
+      }
+      updateQuoteTotals();
+    }
+    nombreInput.addEventListener('input', refreshMatch);
+    unidadInput.addEventListener('change', ()=>{ delete precioInput.dataset.userEdited; refreshMatch(); });
+    precioInput.addEventListener('input', ()=>{ precioInput.dataset.userEdited='1'; updateQuoteTotals(); });
+    row.querySelector('.qm-cantidad').addEventListener('input', updateQuoteTotals);
+    refreshMatch();
+  }
+  function collectQuoteMedRows(){
+    return [...$('#quoteMedRows').querySelectorAll('.repeat-row')].map(row=>({
+      nombre: row.querySelector('.qm-nombre').value.trim(),
+      unidad: row.querySelector('.qm-unidad').value,
+      precio: parseFloat(row.querySelector('.qm-precio').value)||0,
+      cantidad: Math.max(1, parseInt(row.querySelector('.qm-cantidad').value,10)||1)
+    })).filter(v=>v.nombre);
+  }
+  $('#quoteMedRows').addEventListener('click', (e)=>{
+    if(e.target.closest('.remove-row-btn')){ e.target.closest('.repeat-row').remove(); updateQuoteTotals(); }
+  });
+  $('#addQuoteMedRow').addEventListener('click', ()=> addQuoteMedRow());
+
+  function updateQuoteTotals(){
+    const totalServicios = collectQuoteServiciosOnly().reduce((s,v)=> s + v.precio*v.cantidad, 0);
+    const totalMeds = collectQuoteMedRows().reduce((s,v)=> s + v.precio*v.cantidad, 0);
+    $('#quoteServiceOnlyTotal').textContent = money(totalServicios);
+    $('#quoteMedOnlyTotal').textContent = money(totalMeds);
+    $('#quoteGrandTotal').textContent = money(totalServicios + totalMeds);
+    renderQuotePreview();
+  }
+
+  function renderQuotePreview(){
+    const cliente = $('#q_cliente').value.trim();
+    const telefono = $('#q_telefono').value.trim();
+    const direccion = $('#q_direccion').value.trim();
+    const paciente = $('#q_paciente').value.trim();
+    const fecha = $('#q_fecha').value;
+    const notas = $('#q_notas').value.trim();
+    const nombreDoctora = clinicInfoCache.nombreDoctora || 'MVZ Yohali Alejandra Almeida Olán';
+    const cedula = clinicInfoCache.cedula || '';
+
+    const serviciosRows = collectQuoteServiciosOnly();
+    const medRows = collectQuoteMedRows();
+    const todas = [
+      ...serviciosRows.map(s=>({...s, tipo:'servicio'})),
+      ...medRows.map(m=>({...m, tipo:'medicamento'}))
+    ];
+    const total = todas.reduce((s,v)=> s + v.precio*v.cantidad, 0);
+
+    const filasHtml = todas.length ? todas.map(item=>{
+      const unidadTxt = item.tipo==='medicamento' ? (item.unidad==='caja' ? (item.cantidad===1?'caja':'cajas') : (item.cantidad===1?'pieza':'piezas')) : '';
+      const icono = item.tipo==='medicamento' ? '💊 ' : '🩺 ';
+      return `<tr><td>${icono}${esc(item.nombre)}</td><td>${item.cantidad}${unidadTxt?' '+unidadTxt:''}</td><td>${money(item.precio)}</td><td>${money(item.precio*item.cantidad)}</td></tr>`;
+    }).join('') : `<tr><td colspan="4" style="text-align:center;color:var(--muted);">Aún no se han agregado conceptos</td></tr>`;
+
+    $('#quotePreview').innerHTML = `
+      <div class="cert-header">
+        <div>
+          <div class="cert-clinic-name">${esc(nombreDoctora)}</div>
+          <div class="cert-clinic-sub">Amor por el Bienestar Animal${cedula ? ' · Cédula profesional: '+esc(cedula) : ''}</div>
+        </div>
+        <img src="${$('#clinicLogo').src}">
+      </div>
+      <h3>COTIZACIÓN — VISITA A DOMICILIO</h3>
+      <p style="text-align:right; font-size:.82rem; color:var(--muted);">Villahermosa, Tabasco, a ${fmtDate(new Date().toISOString().slice(0,10))}</p>
+
+      <div class="cert-grid">
+        <div><b>Cliente:</b> ${esc(cliente)||'—'}</div>
+        <div><b>Teléfono:</b> ${esc(telefono)||'—'}</div>
+        <div><b>Dirección / zona:</b> ${esc(direccion)||'—'}</div>
+        <div><b>Paciente:</b> ${esc(paciente)||'—'}</div>
+        <div><b>Fecha propuesta de visita:</b> ${fecha?fmtDate(fecha):'—'}</div>
+      </div>
+
+      <table>
+        <thead><tr><th>Concepto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th></tr></thead>
+        <tbody>${filasHtml}</tbody>
+        <tfoot><tr style="font-weight:800;"><td colspan="3" style="text-align:right; padding:8px;">Total estimado</td><td style="padding:8px;">${money(total)}</td></tr></tfoot>
+      </table>
+
+      ${notas ? `<p><b>Notas:</b> ${esc(notas)}</p>` : ''}
+      <p style="font-size:.8rem; color:var(--muted);">Esta cotización es un estimado y puede variar según lo que se observe durante la visita. Válida por 15 días a partir de su fecha de emisión.</p>
+
+      <div class="cert-signature">
+        <div class="line"></div>
+        <div><b>${esc(nombreDoctora)}</b></div>
+        ${cedula ? `<div style="font-size:.8rem;">Cédula profesional: ${esc(cedula)}</div>` : ''}
+      </div>
+    `;
+  }
+  ['q_cliente','q_telefono','q_direccion','q_paciente','q_fecha','q_notas'].forEach(id=>{
+    $('#'+id).addEventListener('input', renderQuotePreview);
+  });
+  $('#quoteRefreshBtn').addEventListener('click', renderQuotePreview);
+
+  $('#quoteDownloadBtn').addEventListener('click', async ()=>{
+    const btn = $('#quoteDownloadBtn');
+    const original = btn.textContent;
+    btn.textContent = 'Generando…'; btn.disabled = true;
+    try{
+      const node = $('#quotePreview');
+      const prevMaxHeight = node.style.maxHeight;
+      const prevOverflow = node.style.overflowY;
+      const prevWidth = node.style.width;
+      const prevMaxWidth = node.style.maxWidth;
+      const prevBoxSizing = node.style.boxSizing;
+      node.style.maxHeight = 'none';
+      node.style.overflowY = 'visible';
+      const FIXED_CAPTURE_WIDTH = 760;
+      node.style.boxSizing = 'border-box';
+      node.style.width = FIXED_CAPTURE_WIDTH + 'px';
+      node.style.maxWidth = 'none';
+      void node.offsetHeight;
+      if(document.fonts && document.fonts.ready){ await document.fonts.ready; }
+      await new Promise(r=> requestAnimationFrame(()=> requestAnimationFrame(r)));
+
+      const canvas = await html2canvas(node, {
+        scale: 2, backgroundColor:'#ffffff', useCORS:true,
+        width: FIXED_CAPTURE_WIDTH, windowWidth: FIXED_CAPTURE_WIDTH,
+        x: 0, y: 0, scrollX: 0, scrollY: 0
+      });
+      node.style.maxHeight = prevMaxHeight;
+      node.style.overflowY = prevOverflow;
+      node.style.width = prevWidth;
+      node.style.maxWidth = prevMaxWidth;
+      node.style.boxSizing = prevBoxSizing;
+
+      if(canvas.width < 10 || canvas.height < 10){
+        throw new Error('La captura de la cotización salió vacía. Intenta de nuevo.');
+      }
+
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p','mm','a4');
+      const pageWidthMM=210, pageHeightMM=297, marginMM=12;
+      const contentWidthMM = pageWidthMM - marginMM*2;
+      const imgHeightMM = contentWidthMM * canvas.height / canvas.width;
+      let heightLeft = imgHeightMM, position = marginMM;
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+      pdf.addImage(dataUrl, 'JPEG', marginMM, position, contentWidthMM, imgHeightMM);
+      heightLeft -= (pageHeightMM - marginMM*2);
+      while(heightLeft > 0){
+        pdf.addPage();
+        position = marginMM - (imgHeightMM - heightLeft);
+        pdf.addImage(dataUrl, 'JPEG', marginMM, position, contentWidthMM, imgHeightMM);
+        heightLeft -= (pageHeightMM - marginMM*2);
+      }
+      const cliente = $('#q_cliente').value.trim() || 'cliente';
+      const safeName = cliente.replace(/[^\w\-]+/g,'_');
+      pdf.save(`Cotizacion_Domicilio_${safeName}_${new Date().toISOString().slice(0,10)}.pdf`);
+    } catch(err){
+      alert('No se pudo generar el PDF: ' + err.message);
+    } finally {
+      btn.textContent = original; btn.disabled = false;
+    }
+  });
+
   // ---- view tab switching ----
   const TAB_MAP = {
     tabPatients: 'patientsView',
     tabInventory: 'inventoryView',
     tabServices: 'servicesView',
-    tabBirthdays: 'birthdaysView'
+    tabBirthdays: 'birthdaysView',
+    tabQuotes: 'quotesView'
   };
   function switchToTab(tabId){
     Object.keys(TAB_MAP).forEach(tid=>{
@@ -2689,6 +3015,7 @@
     if(tabId==='tabInventory') renderInventory();
     if(tabId==='tabServices') renderServices();
     if(tabId==='tabBirthdays') renderBirthdays();
+    if(tabId==='tabQuotes') initQuoteViewIfNeeded();
   }
   Object.keys(TAB_MAP).forEach(tid=>{
     $('#'+tid).addEventListener('click', ()=> switchToTab(tid));
